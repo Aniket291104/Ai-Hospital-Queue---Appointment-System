@@ -108,7 +108,7 @@ export const registerUser = asyncHandler(async (req: Request, res: Response, nex
     password,
     phone,
     role: role || UserRole.PATIENT,
-    isEmailVerified: false,
+    isEmailVerified: true,
   });
 
   // Create custom Doctor Profile record if registering as Doctor
@@ -166,7 +166,8 @@ export const registerUser = asyncHandler(async (req: Request, res: Response, nex
     logger.info(`[Doctor Profile] Created doctor profile for user ID: ${user._id}`);
   }
 
-  // Generate OTP
+  // Generate OTP (Temporarily Paused)
+  /*
   const otpCode = generateOTP();
   await Otp.create({ email, otp: otpCode });
 
@@ -182,10 +183,11 @@ export const registerUser = asyncHandler(async (req: Request, res: Response, nex
     logger.error(`[SMTP Error] Failed to send verification email to ${email}`, err);
     // Don't fail the registration request if nodemailer SMTP is unconfigured/offline
   }
+  */
 
   res.status(201).json({
     success: true,
-    message: 'Registration successful. OTP sent to your email.',
+    message: 'Registration successful! You can now log in.',
     email: user.email,
   });
 });

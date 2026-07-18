@@ -88,7 +88,7 @@ export default function RegisterPage() {
       });
 
       toast.success(response.data.message);
-      setOtpSent(true);
+      router.push('/login');
     } catch (error: any) {
       const apiErrors = error.response?.data?.errors;
       if (Array.isArray(apiErrors) && apiErrors.length > 0) {
