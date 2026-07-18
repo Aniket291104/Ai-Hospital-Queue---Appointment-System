@@ -14,9 +14,21 @@ export default function DoctorDashboard() {
 
   const [queue, setQueue] = useState<any>(null);
   const [doctorId, setDoctorId] = useState<string | null>(null);
+  const [doctorProfile, setDoctorProfile] = useState<any>(null);
   const [delay, setDelay] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+
+  // Notifications and Settings popover state
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [notifications, setNotifications] = useState<string[]>([
+    'System Update: Core database successfully synchronized.',
+    'Queue alert: Patient checked in and waiting in queue.',
+    'Symptom Triage engine is fully online.',
+  ]);
+  const [settingsSound, setSettingsSound] = useState(true);
+  const [settingsLiveAI, setSettingsLiveAI] = useState(true);
 
   useEffect(() => {
     if (!user || user.role !== 'Doctor') {
@@ -45,10 +57,11 @@ export default function DoctorDashboard() {
   const fetchDoctorProfile = async () => {
     try {
       const response = await api.get('/doctors');
-      const doctorProfile = response.data.data.find((d: any) => d.user?._id === user?.id);
-      if (doctorProfile) {
-        setDoctorId(doctorProfile._id);
-        setDelay(doctorProfile.estimatedDelay || 0);
+      const profileData = response.data.data.find((d: any) => d.user?._id === user?.id);
+      if (profileData) {
+        setDoctorId(profileData._id);
+        setDelay(profileData.estimatedDelay || 0);
+        setDoctorProfile(profileData);
       } else {
         toast.error('Doctor profile record not found');
       }
@@ -113,9 +126,9 @@ export default function DoctorDashboard() {
   const inConsultation = queue?.patients?.find((p: any) => p.status === 'In-Consultation');
 
   return (
-    <div className="min-h-screen bg-[#DAE3EE] text-[#2C3137] font-urbanist relative overflow-x-hidden p-4 md:p-8 flex items-center justify-center">
-      {/* Main Container simulating the Monitor/UI window */}
-      <div className="w-full max-w-[1380px] bg-[#DAE3EE] rounded-[32px] overflow-hidden relative border border-white/30 shadow-2xl p-6 md:p-10 space-y-8 min-h-[90vh] flex flex-col justify-between">
+    <div className="min-h-screen bg-[#DAE3EE] text-[#2C3137] font-urbanist relative overflow-x-hidden p-6 md:p-10 flex flex-col justify-between w-full max-w-[1380px] mx-auto">
+      {/* Main Container content wrapper */}
+      <div className="flex-grow flex flex-col space-y-8 w-full z-10 relative">
         
         {/* DNA Helix Background SVG */}
         <div className="absolute inset-0 pointer-events-none opacity-[0.35] z-0 flex items-center justify-center overflow-hidden">
@@ -166,13 +179,34 @@ export default function DoctorDashboard() {
 
             {/* Profile Dropdown */}
             {showProfileDropdown && (
-              <div className="absolute left-0 mt-2 w-48 bg-[#FCFDFF] rounded-2xl shadow-xl border border-white/50 py-2 z-50">
+              <div className="absolute left-0 mt-2 w-72 bg-[#FCFDFF] rounded-2xl shadow-xl border border-white/50 p-4 z-50 space-y-3 text-xs text-[#2C3137] animate-fade-in">
+                <div className="border-b pb-2 space-y-1">
+                  <p className="font-extrabold text-sm text-[#2C3137]">Dr. {user?.firstName} {user?.lastName}</p>
+                  <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide">
+                    {doctorProfile?.specialization || 'Clinical Expert'} • {doctorProfile?.department?.name || 'Department'}
+                  </p>
+                </div>
+
+                {doctorProfile && (
+                  <div className="space-y-2 border-b pb-2 text-[10px] text-[#7C7C7C] font-bold">
+                    <p>💼 Practice Exp: <strong className="text-[#2C3137]">{doctorProfile.experience} Years</strong></p>
+                    <p>💳 Consultation Fees: <strong className="text-[#2C3137]">INR {doctorProfile.fees}</strong></p>
+                    <p>🏫 Clinic Facility: <strong className="text-[#2C3137]">{doctorProfile.hospital?.name}</strong></p>
+                    <p>⏰ Avg Consultation: <strong className="text-[#2C3137]">{doctorProfile.averageConsultationTime || '15'} mins</strong></p>
+                    {doctorProfile.bio && (
+                      <p className="italic text-gray-400 font-medium leading-relaxed pt-1 border-t border-gray-100">
+                        "{doctorProfile.bio}"
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 font-bold transition-all"
+                  className="w-full flex items-center justify-center gap-2 py-2 text-xs text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all cursor-pointer"
                 >
-                  <LogOut className="w-4 h-4" />
-                  Logout
+                  <LogOut className="w-3.5 h-3.5" />
+                  Logout from ERP
                 </button>
               </div>
             )}
@@ -195,13 +229,106 @@ export default function DoctorDashboard() {
               <Search className="w-4 h-4 text-[#7C7C7C] absolute left-3" />
             </div>
 
-            <button className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm relative">
-              <Bell className="w-4 h-4 text-[#2C3137]" />
-            </button>
+            {/* Notification Bell */}
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  setShowSettings(false);
+                  setShowProfileDropdown(false);
+                }}
+                className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm relative cursor-pointer flex items-center justify-center"
+              >
+                <Bell className="w-4 h-4 text-[#2C3137]" />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </button>
 
-            <button className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm">
-              <Settings className="w-4 h-4 text-[#2C3137]" />
-            </button>
+              {showNotifications && (
+                <div className="absolute right-0 mt-3 w-80 bg-white border border-gray-100 p-4 rounded-2xl shadow-xl z-50 space-y-3 text-xs text-[#2C3137] animate-fade-in">
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <span className="font-extrabold text-sm">Notifications</span>
+                    {notifications.length > 0 && (
+                      <button 
+                        onClick={() => setNotifications([])}
+                        className="text-[10px] text-[#6AB8FF] hover:underline font-bold cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <p className="text-gray-400 italic text-center py-4">No new notifications.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {notifications.map((notif, idx) => (
+                        <div key={idx} className="p-2.5 bg-[#DAE3EE]/20 rounded-xl font-semibold leading-normal">
+                          {notif}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Settings */}
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowSettings(!showSettings);
+                  setShowNotifications(false);
+                  setShowProfileDropdown(false);
+                }}
+                className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm cursor-pointer flex items-center justify-center"
+              >
+                <Settings className="w-4 h-4 text-[#2C3137]" />
+              </button>
+
+              {showSettings && (
+                <div className="absolute right-0 mt-3 w-72 bg-white border border-gray-100 p-5 rounded-2xl shadow-xl z-50 space-y-4 text-xs text-[#2C3137] animate-fade-in">
+                  <h4 className="font-extrabold text-sm border-b pb-2">Account Settings</h4>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-[#7C7C7C]">Sound Alerts</span>
+                      <input 
+                        type="checkbox" 
+                        checked={settingsSound} 
+                        onChange={() => setSettingsSound(!settingsSound)}
+                        className="w-4 h-4 text-[#6AB8FF] rounded border-gray-300 focus:ring-[#6AB8FF] cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-[#7C7C7C]">Live AI Triage</span>
+                      <input 
+                        type="checkbox" 
+                        checked={settingsLiveAI} 
+                        onChange={() => setSettingsLiveAI(!settingsLiveAI)}
+                        className="w-4 h-4 text-[#6AB8FF] rounded border-gray-300 focus:ring-[#6AB8FF] cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="pt-2 border-t text-[10px] text-gray-500 font-semibold space-y-1">
+                      <p>Console Role: <strong className="text-gray-700">{user?.role}</strong></p>
+                      <p>Active ID: <strong className="text-gray-700">{user?.id?.substring(0, 8)}...</strong></p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      setShowSettings(false);
+                      toast.success('Settings saved successfully!');
+                    }}
+                    className="w-full py-2 bg-gradient-to-r from-[#6AB8FF] to-[#CFA3F6] text-white text-xs font-bold rounded-lg hover:opacity-95 shadow-sm cursor-pointer"
+                  >
+                    Save & Close
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -375,17 +502,22 @@ export default function DoctorDashboard() {
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="z-10 relative flex flex-col sm:flex-row justify-between items-center text-[11px] text-[#7C7C7C] font-semibold pt-6 border-t border-white/20 gap-2">
-          <div>
-            <span>Hospital ERP v1.0.0 • Doctor Console</span>
-          </div>
-          <div>
-            <span>Smart Queue. Better Care.</span>
-          </div>
-        </footer>
-
       </div>
+
+      {/* Footer */}
+      <footer className="z-10 relative flex flex-col sm:flex-row justify-between items-center text-[11px] text-[#7C7C7C] font-semibold pt-6 border-t border-white/20 gap-4">
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+          <span className="font-extrabold text-[#2C3137]">Hospital ERP v1.0.0 • Doctor Console</span>
+          <span className="hidden sm:inline opacity-30">|</span>
+          <span>&copy; {new Date().getFullYear()} HospitalAI Inc.</span>
+        </div>
+        <div className="flex gap-6 font-bold text-[#6AB8FF]">
+          <a href="#" className="hover:underline">Privacy Policy</a>
+          <a href="#" className="hover:underline">Terms of Service</a>
+          <a href="#" className="hover:underline">Support</a>
+        </div>
+      </footer>
+
     </div>
   );
 }

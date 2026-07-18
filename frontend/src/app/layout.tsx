@@ -16,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${urbanist.className} antialiased bg-[#DAE3EE] text-[#2C3137]`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${urbanist.className} antialiased bg-[#DAE3EE] text-[#2C3137]`} suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

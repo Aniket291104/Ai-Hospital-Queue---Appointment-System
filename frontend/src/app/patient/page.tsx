@@ -36,6 +36,11 @@ export default function PatientDashboard() {
   const [qrOpen, setQrOpen] = useState(false);
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
 
+  // Specialists Directory States
+  const [allDoctors, setAllDoctors] = useState<any[]>([]);
+  const [searchDoctorQuery, setSearchDoctorQuery] = useState('');
+  const [selectedDetailDoctor, setSelectedDetailDoctor] = useState<any>(null);
+
   // Fetch base data
   useEffect(() => {
     if (!user) {
@@ -45,6 +50,7 @@ export default function PatientDashboard() {
 
     fetchAppointments();
     fetchHospitals();
+    fetchAllDoctors();
   }, [user]);
 
   // Socket for live queue updates
@@ -84,6 +90,33 @@ export default function PatientDashboard() {
       setHospitals(response.data.data);
     } catch (err) {
       console.error('Failed to fetch hospitals');
+    }
+  };
+
+  const fetchAllDoctors = async () => {
+    try {
+      const response = await api.get('/doctors');
+      setAllDoctors(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch all doctors');
+    }
+  };
+
+  const selectDoctorFromDirectory = async (doc: any) => {
+    setSelectedHospital(doc.hospital?._id || '');
+    setSelectedDepartment(doc.department?._id || '');
+    
+    try {
+      const deptRes = await api.get(`/hospitals/${doc.hospital?._id}/departments`);
+      setDepartments(deptRes.data.data || []);
+      
+      const docRes = await api.get(`/doctors?hospital=${doc.hospital?._id}&department=${doc.department?._id}`);
+      setDoctors(docRes.data.data || []);
+      
+      setSelectedDoctor(doc._id);
+      toast.success(`Selected Dr. ${doc.user?.firstName} in booking form!`);
+    } catch (err) {
+      toast.error('Failed to prefill booking details');
     }
   };
 
@@ -233,9 +266,10 @@ export default function PatientDashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 space-y-8 overflow-y-auto max-w-5xl mx-auto w-full">
-        {/* Welcome Banner */}
-        <header className="flex justify-between items-center">
+      <main className="flex-1 p-6 md:p-10 flex flex-col min-h-screen overflow-y-auto max-w-5xl mx-auto w-full">
+        <div className="flex-grow space-y-8">
+          {/* Welcome Banner */}
+          <header className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">Welcome, {user?.firstName}!</h1>
             <p className="text-muted text-sm mt-1">Smart Queue. Better Care.</p>
@@ -281,6 +315,72 @@ export default function PatientDashboard() {
               ))}
           </section>
         )}
+
+        {/* Medical Specialists Directory */}
+        <section className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-[#2C3137]">Featured Medical Specialists</h3>
+              <p className="text-xs text-muted-foreground font-semibold">Browse our clinical experts, specializations, and availability slots</p>
+            </div>
+            <div className="relative w-full sm:w-80">
+              <input
+                type="text"
+                placeholder="Search specialists by name or department..."
+                value={searchDoctorQuery}
+                onChange={(e) => setSearchDoctorQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
+              />
+              <span className="absolute left-3 top-2 text-muted-foreground text-xs">🔍</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {allDoctors
+              .filter((d: any) => 
+                !searchDoctorQuery ||
+                `${d.user?.firstName} ${d.user?.lastName}`.toLowerCase().includes(searchDoctorQuery.toLowerCase()) ||
+                d.specialization?.toLowerCase().includes(searchDoctorQuery.toLowerCase()) ||
+                d.department?.name?.toLowerCase().includes(searchDoctorQuery.toLowerCase())
+              )
+              .map((d: any) => (
+                <div key={d._id} className="bg-card border border-border p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">
+                          {d.user?.firstName?.[0] || 'D'}
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-[#2C3137]">Dr. {d.user?.firstName} {d.user?.lastName}</h4>
+                          <span className="px-2 py-0.5 rounded bg-blue-500/10 text-[#6AB8FF] text-[9px] font-extrabold uppercase tracking-wide">
+                            {d.specialization}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-amber-500">⭐ {d.rating || '4.8'}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                      {d.bio || 'Experienced consultant specialist dedicated to patient health and welfare.'}
+                    </p>
+                  </div>
+
+                  <div className="border-t border-border/60 pt-3 flex flex-wrap gap-2 text-[10px] font-bold text-muted-foreground">
+                    <span className="bg-secondary/40 px-2 py-1 rounded-md">💼 {d.experience} Yrs Exp</span>
+                    <span className="bg-secondary/40 px-2 py-1 rounded-md">💳 INR {d.fees}</span>
+                    <span className="bg-secondary/40 px-2 py-1 rounded-md">🏥 {d.hospital?.name}</span>
+                  </div>
+
+                  <button 
+                    onClick={() => setSelectedDetailDoctor(d)}
+                    className="w-full py-2 bg-[#6AB8FF]/10 hover:bg-[#6AB8FF] text-[#6AB8FF] hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  >
+                    View Detailing & Schedule
+                  </button>
+                </div>
+              ))}
+          </div>
+        </section>
 
         {/* Appointment Booking Panel */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -472,6 +572,21 @@ export default function PatientDashboard() {
             </div>
           </div>
         </section>
+        </div>
+
+        {/* Footer */}
+        <footer className="w-full flex flex-col sm:flex-row justify-between items-center text-xs text-muted-foreground pt-6 border-t border-border gap-4 mt-8">
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+            <span className="font-extrabold text-[#2C3137]">Hospital ERP v1.0.0 • Patient Console</span>
+            <span className="hidden sm:inline opacity-30">|</span>
+            <span className="font-semibold">&copy; {new Date().getFullYear()} HospitalAI Inc.</span>
+          </div>
+          <div className="flex gap-6 font-bold text-[#6AB8FF]">
+            <a href="#" className="hover:underline">Privacy Policy</a>
+            <a href="#" className="hover:underline">Terms of Service</a>
+            <a href="#" className="hover:underline">Support</a>
+          </div>
+        </footer>
       </main>
 
       {/* Floating Chat Box */}
@@ -514,6 +629,92 @@ export default function PatientDashboard() {
         >
           💬
         </button>
+      )}
+
+      {/* Doctor Deep Detailing Modal */}
+      {selectedDetailDoctor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in select-none">
+          <div className="bg-card border border-border rounded-3xl p-6 max-w-lg w-full shadow-2xl relative space-y-6">
+            <button 
+              onClick={() => setSelectedDetailDoctor(null)}
+              className="absolute top-4 right-4 text-muted hover:text-foreground text-xl font-bold cursor-pointer"
+            >
+              ×
+            </button>
+
+            <div className="flex gap-4 items-start border-b border-border pb-4">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold text-xl">
+                {selectedDetailDoctor.user?.firstName?.[0] || 'D'}
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-extrabold text-foreground">
+                  Dr. {selectedDetailDoctor.user?.firstName} {selectedDetailDoctor.user?.lastName}
+                </h3>
+                <p className="text-xs text-blue-500 font-bold uppercase tracking-wider">
+                  {selectedDetailDoctor.specialization} • {selectedDetailDoctor.department?.name}
+                </p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-amber-500 font-bold">⭐ {selectedDetailDoctor.rating || '4.8'}</span>
+                  <span className="text-muted-foreground opacity-60">|</span>
+                  <span className="text-muted-foreground font-semibold">{selectedDetailDoctor.reviewsCount || '18'} Patient Reviews</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs leading-relaxed">
+              <div className="space-y-1.5">
+                <h5 className="font-extrabold text-[#7C7C7C] uppercase tracking-wider text-[10px]">Medical Biography</h5>
+                <p className="text-muted-foreground font-medium">
+                  {selectedDetailDoctor.bio || 'Dedicated medical consultant with extensive training and clinical practice history in advanced symptom management.'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 bg-secondary/50 p-3.5 rounded-2xl border border-border/40">
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold block">Experience</span>
+                  <span className="font-bold text-foreground">{selectedDetailDoctor.experience} Years Practice</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold block">Consultation Fee</span>
+                  <span className="font-bold text-foreground">INR {selectedDetailDoctor.fees}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold block">Hospital Facility</span>
+                  <span className="font-bold text-foreground">{selectedDetailDoctor.hospital?.name}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground font-semibold block">Average Visit Time</span>
+                  <span className="font-bold text-foreground">{selectedDetailDoctor.averageConsultationTime || '15'} Minutes</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="font-extrabold text-[#7C7C7C] uppercase tracking-wider text-[10px]">Availability & Schedule</h5>
+                <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                  {selectedDetailDoctor.availability && selectedDetailDoctor.availability.length > 0 ? (
+                    selectedDetailDoctor.availability.map((slot: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center bg-background border p-2 rounded-lg font-semibold">
+                        <span className="text-foreground">{slot.day}</span>
+                        <span className="text-blue-500 font-bold">{slot.startTime} - {slot.endTime}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground italic text-center py-2">No active availability slots.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button 
+                onClick={() => selectDoctorFromDirectory(selectedDetailDoctor)}
+                className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:opacity-95 transition-all text-center cursor-pointer"
+              >
+                Choose This Specialist to Book
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

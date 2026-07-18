@@ -102,11 +102,7 @@ export default function Home() {
 
         {/* Hero Section */}
         <main className="flex-1 flex flex-col items-center justify-center text-center space-y-6 z-10 relative max-w-4xl mx-auto">
-          {/* Live Indicator Pill */}
-          <div className="inline-flex items-center gap-2 bg-[#FCFDFF] border border-white/60 px-4 py-1.5 rounded-full text-[11px] text-[#7C7C7C] font-bold shadow-sm">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#6AB8FF] animate-pulse"></span>
-            Now Live: AI Triage & Real-time Queue Tracking
-          </div>
+
 
           {/* Hero Heading */}
           <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.15] text-[#2C3137]">
@@ -144,7 +140,6 @@ export default function Home() {
           <div className="bg-[#FCFDFF] rounded-[24px] p-6 border border-white/50 shadow-md flex flex-col justify-between hover:shadow-lg transition-all space-y-2">
             <div className="flex justify-between items-start border-b border-gray-100 pb-2">
               <span className="text-[10px] font-bold text-[#7C7C7C] uppercase tracking-wider">AI Triage System</span>
-              <Sparkles className="w-3.5 h-3.5 text-[#6AB8FF]" />
             </div>
             <div>
               <h4 className="text-xs font-extrabold text-[#2C3137] mb-1">Smart Assessment</h4>

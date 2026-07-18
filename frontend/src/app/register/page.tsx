@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '../../lib/api';
@@ -21,6 +21,49 @@ export default function RegisterPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
 
+  // Doctor specific fields
+  const [specialization, setSpecialization] = useState('General Physician');
+  const [experience, setExperience] = useState(5);
+  const [fees, setFees] = useState(500);
+  const [bio, setBio] = useState('General practitioner dedicated to patient health and family care.');
+  const [hospitals, setHospitals] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [selectedHospital, setSelectedHospital] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+
+  useEffect(() => {
+    if (role === 'Doctor') {
+      fetchHospitals();
+    }
+  }, [role]);
+
+  const fetchHospitals = async () => {
+    try {
+      const response = await api.get('/hospitals');
+      const hosps = response.data.data || [];
+      setHospitals(hosps);
+      if (hosps.length > 0) {
+        setSelectedHospital(hosps[0]._id);
+        fetchDepartments(hosps[0]._id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch hospitals');
+    }
+  };
+
+  const fetchDepartments = async (hospitalId: string) => {
+    try {
+      const response = await api.get(`/hospitals/${hospitalId}/departments`);
+      const depts = response.data.data || [];
+      setDepartments(depts);
+      if (depts.length > 0) {
+        setSelectedDepartment(depts[0]._id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch departments');
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -34,12 +77,27 @@ export default function RegisterPage() {
         phone,
         role,
         staffAccessKey,
+        ...(role === 'Doctor' && {
+          specialization,
+          experience: Number(experience),
+          fees: Number(fees),
+          bio,
+          hospital: selectedHospital,
+          department: selectedDepartment,
+        }),
       });
 
       toast.success(response.data.message);
       setOtpSent(true);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Registration failed');
+      const apiErrors = error.response?.data?.errors;
+      if (Array.isArray(apiErrors) && apiErrors.length > 0) {
+        apiErrors.forEach((err: any) => {
+          toast.error(err.message || 'Validation error');
+        });
+      } else {
+        toast.error(error.response?.data?.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -206,6 +264,107 @@ export default function RegisterPage() {
                   placeholder="Enter invitation/staff secret key"
                   className="w-full px-5 py-3 rounded-full border border-white/60 bg-[#FCFDFF] text-[#2C3137] text-xs font-semibold placeholder-[#7C7C7C] focus:outline-none focus:ring-2 focus:ring-[#6AB8FF]/50 shadow-sm transition-all"
                 />
+              </div>
+            )}
+
+            {role === 'Doctor' && (
+              <div className="space-y-4 border-t border-white/20 pt-4 mt-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-3">Specialization</label>
+                    <input
+                      type="text"
+                      required
+                      value={specialization}
+                      onChange={(e) => setSpecialization(e.target.value)}
+                      placeholder="e.g. Cardiologist"
+                      className="w-full px-5 py-3 rounded-full border border-white/60 bg-[#FCFDFF] text-[#2C3137] text-xs font-semibold placeholder-[#7C7C7C] focus:outline-none focus:ring-2 focus:ring-[#6AB8FF]/50 shadow-sm transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-3">Experience (Years)</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={experience}
+                      onChange={(e) => setExperience(Number(e.target.value))}
+                      placeholder="e.g. 10"
+                      className="w-full px-5 py-3 rounded-full border border-white/60 bg-[#FCFDFF] text-[#2C3137] text-xs font-semibold placeholder-[#7C7C7C] focus:outline-none focus:ring-2 focus:ring-[#6AB8FF]/50 shadow-sm transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-3">Consultation Fee (INR)</label>
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      value={fees}
+                      onChange={(e) => setFees(Number(e.target.value))}
+                      placeholder="e.g. 500"
+                      className="w-full px-5 py-3 rounded-full border border-white/60 bg-[#FCFDFF] text-[#2C3137] text-xs font-semibold placeholder-[#7C7C7C] focus:outline-none focus:ring-2 focus:ring-[#6AB8FF]/50 shadow-sm transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-3">Select Hospital</label>
+                    <div className="relative">
+                      <select
+                        value={selectedHospital}
+                        onChange={(e) => {
+                          setSelectedHospital(e.target.value);
+                          fetchDepartments(e.target.value);
+                        }}
+                        className="w-full px-5 py-3 rounded-full border border-white/60 bg-[#FCFDFF] text-[#2C3137] text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#6AB8FF]/50 shadow-sm transition-all appearance-none cursor-pointer"
+                      >
+                        {hospitals.map((h: any) => (
+                          <option key={h._id} value={h._id}>{h.name}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                        <svg className="fill-current h-4 w-4 text-[#7C7C7C]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-3">Select Department</label>
+                    <div className="relative">
+                      <select
+                        value={selectedDepartment}
+                        onChange={(e) => setSelectedDepartment(e.target.value)}
+                        className="w-full px-5 py-3 rounded-full border border-white/60 bg-[#FCFDFF] text-[#2C3137] text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#6AB8FF]/50 shadow-sm transition-all appearance-none cursor-pointer"
+                      >
+                        {departments.map((d: any) => (
+                          <option key={d._id} value={d._id}>{d.name}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                        <svg className="fill-current h-4 w-4 text-[#7C7C7C]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-3">Biography & Treatment Focus</label>
+                  <textarea
+                    required
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Describe what you specialize in (e.g. Heart Specialist) and what treatments/services you perform (e.g. Angioplasty, heart surgeries, ECGs)."
+                    rows={3}
+                    className="w-full px-5 py-3 rounded-2xl border border-white/60 bg-[#FCFDFF] text-[#2C3137] text-xs font-semibold placeholder-[#7C7C7C] focus:outline-none focus:ring-2 focus:ring-[#6AB8FF]/50 shadow-sm transition-all resize-none"
+                  />
+                </div>
               </div>
             )}
 

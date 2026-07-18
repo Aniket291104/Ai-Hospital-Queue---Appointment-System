@@ -22,6 +22,17 @@ export default function AdminDashboard() {
   const [hospitalsCount, setHospitalsCount] = useState(0);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
+  // Notifications and Settings popover state
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [notifications, setNotifications] = useState<string[]>([
+    'System Update: Core database successfully synchronized.',
+    'System Alert: 2 database collections backed up successfully.',
+    'API Status: Gemini AI triage engine is operational.',
+  ]);
+  const [settingsSound, setSettingsSound] = useState(true);
+  const [settingsLiveAI, setSettingsLiveAI] = useState(true);
+
   // Appointments (Outdoor tab)
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
@@ -49,6 +60,73 @@ export default function AdminDashboard() {
   const [ocrImageBase64, setOcrImageBase64] = useState<string>('');
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrResult, setOcrResult] = useState<any>(null);
+
+  // Edit Doctor profile states & handlers
+  const [editingDoctor, setEditingDoctor] = useState<any>(null);
+  const [editDocSpecialization, setEditDocSpecialization] = useState('');
+  const [editDocExperience, setEditDocExperience] = useState(0);
+  const [editDocFees, setEditDocFees] = useState(0);
+  const [editDocBio, setEditDocBio] = useState('');
+  const [editDocHospital, setEditDocHospital] = useState('');
+  const [editDocDepartment, setEditDocDepartment] = useState('');
+  const [editDocDeptsList, setEditDocDeptsList] = useState<any[]>([]);
+
+  const handleStartEditDoctor = async (doc: any) => {
+    setEditingDoctor(doc);
+    setEditDocSpecialization(doc.specialization || '');
+    setEditDocExperience(doc.experience || 0);
+    setEditDocFees(doc.fees || 0);
+    setEditDocBio(doc.bio || '');
+    setEditDocHospital(doc.hospital?._id || '');
+    setEditDocDepartment(doc.department?._id || '');
+    
+    if (doc.hospital?._id) {
+      try {
+        const response = await api.get(`/hospitals/${doc.hospital._id}/departments`);
+        setEditDocDeptsList(response.data.data || []);
+      } catch (err) {
+        console.error('Failed to load departments');
+      }
+    }
+  };
+
+  const handleHospitalChangeForEdit = async (hospitalId: string) => {
+    setEditDocHospital(hospitalId);
+    try {
+      const response = await api.get(`/hospitals/${hospitalId}/departments`);
+      const depts = response.data.data || [];
+      setEditDocDeptsList(depts);
+      if (depts.length > 0) {
+        setEditDocDepartment(depts[0]._id);
+      } else {
+        setEditDocDepartment('');
+      }
+    } catch (err) {
+      console.error('Failed to load departments');
+    }
+  };
+
+  const handleUpdateDoctorProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoctor) return;
+
+    try {
+      await api.put(`/doctors/${editingDoctor._id}`, {
+        specialization: editDocSpecialization,
+        experience: Number(editDocExperience),
+        fees: Number(editDocFees),
+        bio: editDocBio,
+        hospital: editDocHospital,
+        department: editDocDepartment,
+      });
+
+      toast.success('Doctor profile updated successfully!');
+      setEditingDoctor(null);
+      fetchDoctors();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update doctor profile');
+    }
+  };
 
   // Master Data state
   const [hospitals, setHospitals] = useState<any[]>([]);
@@ -254,24 +332,9 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <div className="h-screen w-screen bg-[#DAE3EE] text-[#2C3137] font-urbanist relative overflow-hidden p-4 flex items-center justify-center select-none">
-      {/* Import Urbanist Font */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800&display=swap');
-        .font-urbanist {
-          font-family: 'Urbanist', sans-serif;
-        }
-        .scrollbar-none::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-none {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
-
-      {/* Main Container simulating the Monitor/UI window */}
-      <div className="w-full max-w-[1380px] h-[92vh] bg-[#DAE3EE] rounded-[32px] overflow-hidden relative border border-[#FCFDFF]/30 shadow-2xl p-6 md:p-10 flex flex-col justify-between">
+    <div className="min-h-screen bg-[#DAE3EE] text-[#2C3137] font-urbanist relative overflow-x-hidden p-6 md:p-10 flex flex-col justify-between w-full max-w-[1380px] mx-auto select-none">
+      {/* Main Container content wrapper */}
+      <div className="flex-grow flex flex-col space-y-8 w-full z-10 relative">
         
         {/* DNA Helix Background SVG */}
         <div className="absolute inset-0 pointer-events-none opacity-[0.25] z-0 flex items-center justify-center overflow-hidden">
@@ -353,15 +416,105 @@ export default function AdminDashboard() {
             </div>
 
             {/* Notification Bell */}
-            <button className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm relative">
-              <Bell className="w-4 h-4 text-[#2C3137]" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  setShowSettings(false);
+                  setShowProfileDropdown(false);
+                }}
+                className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm relative cursor-pointer flex items-center justify-center"
+              >
+                <Bell className="w-4 h-4 text-[#2C3137]" />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-3 w-80 bg-white border border-gray-100 p-4 rounded-2xl shadow-xl z-50 space-y-3 text-xs text-[#2C3137] animate-fade-in">
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <span className="font-extrabold text-sm">Notifications</span>
+                    {notifications.length > 0 && (
+                      <button 
+                        onClick={() => setNotifications([])}
+                        className="text-[10px] text-[#6AB8FF] hover:underline font-bold cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <p className="text-gray-400 italic text-center py-4">No new notifications.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {notifications.map((notif, idx) => (
+                        <div key={idx} className="p-2.5 bg-[#DAE3EE]/20 rounded-xl font-semibold leading-normal">
+                          {notif}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Settings */}
-            <button className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm">
-              <Settings className="w-4 h-4 text-[#2C3137]" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowSettings(!showSettings);
+                  setShowNotifications(false);
+                  setShowProfileDropdown(false);
+                }}
+                className="p-2.5 bg-[#FCFDFF] hover:bg-[#FCFDFF]/90 transition-all rounded-full border border-white/40 shadow-sm cursor-pointer flex items-center justify-center"
+              >
+                <Settings className="w-4 h-4 text-[#2C3137]" />
+              </button>
+
+              {showSettings && (
+                <div className="absolute right-0 mt-3 w-72 bg-white border border-gray-100 p-5 rounded-2xl shadow-xl z-50 space-y-4 text-xs text-[#2C3137] animate-fade-in">
+                  <h4 className="font-extrabold text-sm border-b pb-2">Account Settings</h4>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-[#7C7C7C]">Sound Alerts</span>
+                      <input 
+                        type="checkbox" 
+                        checked={settingsSound} 
+                        onChange={() => setSettingsSound(!settingsSound)}
+                        className="w-4 h-4 text-[#6AB8FF] rounded border-gray-300 focus:ring-[#6AB8FF] cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-[#7C7C7C]">Live AI Triage</span>
+                      <input 
+                        type="checkbox" 
+                        checked={settingsLiveAI} 
+                        onChange={() => setSettingsLiveAI(!settingsLiveAI)}
+                        className="w-4 h-4 text-[#6AB8FF] rounded border-gray-300 focus:ring-[#6AB8FF] cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="pt-2 border-t text-[10px] text-gray-500 font-semibold space-y-1">
+                      <p>Console Role: <strong className="text-gray-700">{user?.role}</strong></p>
+                      <p>Active ID: <strong className="text-gray-700">{user?.id?.substring(0, 8)}...</strong></p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      setShowSettings(false);
+                      toast.success('Settings saved successfully!');
+                    }}
+                    className="w-full py-2 bg-gradient-to-r from-[#6AB8FF] to-[#CFA3F6] text-white text-xs font-bold rounded-lg hover:opacity-95 shadow-sm cursor-pointer"
+                  >
+                    Save & Close
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1037,7 +1190,8 @@ export default function AdminDashboard() {
                           <th className="pb-3 pr-2">Experience</th>
                           <th className="pb-3 pr-2">Fees (INR)</th>
                           <th className="pb-3 pr-2">Availability</th>
-                          <th className="pb-3">Contact Email</th>
+                          <th className="pb-3 pr-2">Contact Email</th>
+                          <th className="pb-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1054,7 +1208,15 @@ export default function AdminDashboard() {
                                 {doc.availability?.filter((a: any) => a.isActive).map((a: any) => a.day).join(', ') || 'Varies'}
                               </span>
                             </td>
-                            <td className="py-3 text-gray-500 font-medium">{doc.user?.email || 'N/A'}</td>
+                            <td className="py-3 pr-2 text-gray-500 font-medium">{doc.user?.email || 'N/A'}</td>
+                            <td className="py-3 text-right">
+                              <button
+                                onClick={() => handleStartEditDoctor(doc)}
+                                className="px-2.5 py-1 bg-[#6AB8FF] hover:bg-[#6AB8FF]/95 text-white rounded-lg text-[10px] font-extrabold shadow-sm transition-all cursor-pointer"
+                              >
+                                Edit Profile
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1198,18 +1360,142 @@ export default function AdminDashboard() {
 
         </div>
 
-        {/* Bottom Metadata stats info */}
-        <footer className="z-10 relative flex flex-col sm:flex-row justify-between items-center text-[11px] text-[#7C7C7C] font-semibold pt-6 border-t border-white/20 gap-2">
-          <div className="flex items-center gap-6">
-            <span>Total Registered Doctors: <strong className="text-[#2C3137]">{doctorsCount}</strong></span>
-            <span>Total Connected Hospitals: <strong className="text-[#2C3137]">{hospitalsCount}</strong></span>
-          </div>
-          <div>
-            <span>Hospital ERP v1.0.0 • Premium Healthcare Dashboard</span>
-          </div>
-        </footer>
-
       </div>
+
+      {/* Bottom Metadata stats info */}
+      <footer className="z-10 relative flex flex-col sm:flex-row justify-between items-center text-[11px] text-[#7C7C7C] font-semibold pt-6 border-t border-white/20 gap-4">
+        <div className="flex items-center gap-6">
+          <span>Total Registered Doctors: <strong className="text-[#2C3137]">{doctorsCount}</strong></span>
+          <span>Total Connected Hospitals: <strong className="text-[#2C3137]">{hospitalsCount}</strong></span>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+          <span className="font-extrabold text-[#2C3137]">Hospital ERP v1.0.0 • Admin Console</span>
+          <span className="hidden sm:inline opacity-30">|</span>
+          <span className="flex gap-4 font-bold text-[#6AB8FF]">
+            <a href="#" className="hover:underline">Privacy</a>
+            <a href="#" className="hover:underline">Terms</a>
+            <a href="#" className="hover:underline">Support</a>
+          </span>
+        </div>
+      </footer>
+
+      {/* Admin Doctor Profile Editor Modal */}
+      {editingDoctor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in select-none">
+          <form 
+            onSubmit={handleUpdateDoctorProfile}
+            className="bg-[#FCFDFF] border border-white/50 rounded-3xl p-6 max-w-md w-full shadow-2xl relative space-y-5 text-xs text-[#2C3137]"
+          >
+            <button 
+              type="button"
+              onClick={() => setEditingDoctor(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer"
+            >
+              ×
+            </button>
+
+            <div className="border-b pb-3">
+              <h3 className="text-base font-extrabold text-[#2C3137]">Edit Doctor Profile</h3>
+              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                Update credentials for Dr. {editingDoctor.user?.firstName} {editingDoctor.user?.lastName}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-1">Specialization</label>
+                <input
+                  type="text"
+                  required
+                  value={editDocSpecialization}
+                  onChange={(e) => setEditDocSpecialization(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#6AB8FF]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-1">Experience (Years)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={editDocExperience}
+                    onChange={(e) => setEditDocExperience(Number(e.target.value))}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#6AB8FF]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-1">Fees (INR)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={editDocFees}
+                    onChange={(e) => setEditDocFees(Number(e.target.value))}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#6AB8FF]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-1">Hospital Facility</label>
+                  <select
+                    value={editDocHospital}
+                    onChange={(e) => handleHospitalChangeForEdit(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#6AB8FF] cursor-pointer"
+                  >
+                    {hospitals.map((h: any) => (
+                      <option key={h._id} value={h._id}>{h.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-1">Department</label>
+                  <select
+                    value={editDocDepartment}
+                    onChange={(e) => setEditDocDepartment(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#6AB8FF] cursor-pointer"
+                  >
+                    {editDocDeptsList.map((d: any) => (
+                      <option key={d._id} value={d._id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-[#7C7C7C] mb-1.5 ml-1">Biography & Treatment Specialty</label>
+                <textarea
+                  required
+                  value={editDocBio}
+                  onChange={(e) => setEditDocBio(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#6AB8FF] resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex gap-3">
+              <button 
+                type="button"
+                onClick={() => setEditingDoctor(null)}
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all text-center cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                className="flex-1 py-2.5 bg-gradient-to-r from-[#6AB8FF] to-[#CFA3F6] hover:opacity-95 text-white font-bold rounded-xl shadow-md transition-all text-center cursor-pointer"
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
     </div>
   );
 }

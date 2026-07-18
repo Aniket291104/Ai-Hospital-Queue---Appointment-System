@@ -1,15 +1,13 @@
+import { env } from './config/env'; // Load and validate env variables first
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import connectDB from './config/db';
-
-// Load environment variables
-dotenv.config();
+import logger from './utils/logger';
 
 const app = express();
 const httpServer = createServer(app);
@@ -20,7 +18,7 @@ connectDB();
 // Setup Socket.IO
 export const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: env.CLIENT_URL,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -30,7 +28,7 @@ export const io = new Server(httpServer, {
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: env.CLIENT_URL,
     credentials: true,
   })
 );
@@ -70,15 +68,15 @@ app.use(errorHandler);
 
 // Socket.io events
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  logger.info(`User connected: ${socket.id}`);
   
   socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
+    logger.info(`User disconnected: ${socket.id}`);
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = env.PORT;
 
 httpServer.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  logger.info(`Server is running on port ${PORT} in ${env.NODE_ENV} mode`);
 });
