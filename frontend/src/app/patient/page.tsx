@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import io from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { Menu, X } from 'lucide-react';
 
 export default function PatientDashboard() {
   const router = useRouter();
@@ -40,6 +41,7 @@ export default function PatientDashboard() {
   const [allDoctors, setAllDoctors] = useState<any[]>([]);
   const [searchDoctorQuery, setSearchDoctorQuery] = useState('');
   const [selectedDetailDoctor, setSelectedDetailDoctor] = useState<any>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Fetch base data
   useEffect(() => {
@@ -183,13 +185,13 @@ export default function PatientDashboard() {
     }
   };
 
-  const handlePayment = async (apptId: string) => {
+  const handlePayment = async (apptId: string, amount: number) => {
     try {
       const orderRes = await api.post('/payments/order', {
         appointmentId: apptId,
-        amount: 500,
+        amount: amount || 500,
       });
-
+      
       // Verify payment immediately (Mock simulation)
       await api.post('/payments/verify', {
         razorpayOrderId: orderRes.data.orderId,
@@ -236,17 +238,52 @@ export default function PatientDashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 md:hidden animate-fade-in"
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-card border-r border-border p-6 flex flex-col justify-between hidden md:flex">
+      <aside className={`w-64 bg-card border-r border-border p-6 flex flex-col justify-between fixed md:sticky inset-y-0 left-0 z-50 md:z-30 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:flex shadow-xl md:shadow-none`}>
         <div>
-          <div className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-500 mb-8">
-            HospitalAI
+          <div className="flex justify-between items-center mb-8">
+            <div className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-500">
+              HospitalAI
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="md:hidden p-1 hover:bg-secondary rounded-lg border text-muted-foreground flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
           <nav className="space-y-2">
-            <button className="w-full text-left px-4 py-2.5 rounded-lg bg-primary/10 text-primary font-semibold text-sm">
+            <button 
+              onClick={() => {
+                setChatOpen(false);
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                !chatOpen 
+                  ? 'bg-primary/10 text-primary' 
+                  : 'hover:bg-secondary text-muted-foreground'
+              }`}
+            >
               Dashboard
             </button>
-            <button onClick={() => setChatOpen(true)} className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-secondary text-sm">
+            <button 
+              onClick={() => {
+                setChatOpen(true);
+                setIsSidebarOpen(false);
+              }} 
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                chatOpen 
+                  ? 'bg-primary/10 text-primary' 
+                  : 'hover:bg-secondary text-muted-foreground'
+              }`}
+            >
               AI Chat Assistant
             </button>
           </nav>
@@ -270,20 +307,28 @@ export default function PatientDashboard() {
         <div className="flex-grow space-y-8">
           {/* Welcome Banner */}
           <header className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Welcome, {user?.firstName}!</h1>
-            <p className="text-muted text-sm mt-1">Smart Queue. Better Care.</p>
-          </div>
-          <button
-            onClick={() => {
-              logout();
-              router.push('/login');
-            }}
-            className="md:hidden py-1 px-3 border border-border hover:bg-red-500/10 hover:text-red-500 text-xs font-semibold rounded-lg"
-          >
-            Logout
-          </button>
-        </header>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="md:hidden p-2 hover:bg-secondary rounded-xl border border-border flex items-center justify-center cursor-pointer text-muted-foreground"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Welcome, {user?.firstName}!</h1>
+                <p className="text-muted text-xs sm:text-sm mt-1">Smart Queue. Better Care.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                logout();
+                router.push('/login');
+              }}
+              className="md:hidden py-1 px-3 border border-border hover:bg-red-500/10 hover:text-red-500 text-xs font-semibold rounded-lg"
+            >
+              Logout
+            </button>
+          </header>
 
         {/* Live Queue status cards for patient */}
         {appointments.some((appt) => appt.status === 'CheckedIn') && (
@@ -543,10 +588,10 @@ export default function PatientDashboard() {
                     <div className="flex gap-2 justify-end border-t border-border/40 pt-3">
                       {appt.paymentStatus === 'Pending' && (
                         <button
-                          onClick={() => handlePayment(appt._id)}
+                          onClick={() => handlePayment(appt._id, appt.doctor?.fees)}
                           className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded cursor-pointer"
                         >
-                          Pay INR 500
+                          Pay INR {appt.doctor?.fees || 500}
                         </button>
                       )}
                       {appt.paymentStatus === 'Paid' && appt.status === 'Approved' && (
@@ -591,7 +636,7 @@ export default function PatientDashboard() {
 
       {/* Floating Chat Box */}
       {chatOpen ? (
-        <div className="fixed bottom-6 right-6 w-96 bg-card border border-border shadow-2xl rounded-2xl flex flex-col overflow-hidden z-50">
+        <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 bg-card border border-border shadow-2xl rounded-2xl flex flex-col overflow-hidden z-50">
           <div className="p-4 bg-primary text-primary-foreground font-bold flex justify-between items-center">
             <span>AI Health Assistant</span>
             <button onClick={() => setChatOpen(false)} className="text-white hover:text-white/80 font-bold">×</button>

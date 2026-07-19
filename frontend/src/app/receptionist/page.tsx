@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import toast from 'react-hot-toast';
+import { Menu, X } from 'lucide-react';
 
 export default function ReceptionistDashboard() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function ReceptionistDashboard() {
 
   const [appointments, setAppointments] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!user || user.role !== 'Receptionist') {
@@ -51,6 +53,16 @@ export default function ReceptionistDashboard() {
     }
   };
 
+  const handleUpdatePayment = async (apptId: string, paymentStatus: string) => {
+    try {
+      await api.put(`/appointments/${apptId}/status`, { paymentStatus });
+      toast.success('Payment updated to Paid!');
+      fetchAppointments();
+    } catch (err) {
+      toast.error('Failed to update payment status');
+    }
+  };
+
   const filteredAppointments = appointments.filter((appt) => {
     const pName = `${appt.patient?.firstName} ${appt.patient?.lastName}`.toLowerCase();
     const docName = `${appt.doctor?.user?.firstName} ${appt.doctor?.user?.lastName}`.toLowerCase();
@@ -62,14 +74,32 @@ export default function ReceptionistDashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 md:hidden animate-fade-in"
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-card border-r border-border p-6 flex flex-col justify-between hidden md:flex">
+      <aside className={`w-64 bg-card border-r border-border p-6 flex flex-col justify-between fixed md:sticky inset-y-0 left-0 z-50 md:z-30 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:flex shadow-xl md:shadow-none`}>
         <div>
-          <div className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-500 mb-8">
-            HospitalAI
+          <div className="flex justify-between items-center mb-8">
+            <div className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-500">
+              HospitalAI
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="md:hidden p-1 hover:bg-secondary rounded-lg border text-muted-foreground flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
           <nav className="space-y-2">
-            <button className="w-full text-left px-4 py-2.5 rounded-lg bg-primary/10 text-primary font-semibold text-sm">
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="w-full text-left px-4 py-2.5 rounded-lg bg-primary/10 text-primary font-semibold text-sm"
+            >
               Appointments & Check-in
             </button>
           </nav>
@@ -91,9 +121,17 @@ export default function ReceptionistDashboard() {
       {/* Main Content */}
       <main className="flex-1 p-6 md:p-10 space-y-8 overflow-y-auto max-w-5xl mx-auto w-full">
         <header className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Reception Dashboard</h1>
-            <p className="text-muted text-sm mt-1">Manage walk-ins, approve bookings, and run QR check-ins.</p>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-2 hover:bg-secondary rounded-xl border border-border flex items-center justify-center cursor-pointer text-muted-foreground"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Reception Dashboard</h1>
+              <p className="text-muted text-xs sm:text-sm mt-1">Manage walk-ins, approve bookings, and run QR check-ins.</p>
+            </div>
           </div>
           <button
             onClick={() => {
@@ -155,11 +193,18 @@ export default function ReceptionistDashboard() {
                         {new Date(appt.date).toLocaleDateString()} at {appt.timeSlot}
                       </td>
                       <td className="py-4 px-6 text-xs">
-                        <span className={`px-2 py-0.5 rounded font-bold uppercase ${
-                          appt.paymentStatus === 'Paid' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
-                        }`}>
-                          {appt.paymentStatus}
-                        </span>
+                        {appt.paymentStatus === 'Paid' ? (
+                          <span className="px-2 py-0.5 rounded font-bold uppercase bg-emerald-500/10 text-emerald-500">
+                            Paid
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleUpdatePayment(appt._id, 'Paid')}
+                            className="px-2.5 py-1 text-[10px] rounded font-bold uppercase bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white cursor-pointer transition-all border border-red-500/20"
+                          >
+                            Pending
+                          </button>
+                        )}
                       </td>
                       <td className="py-4 px-6">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${

@@ -234,9 +234,10 @@ export const downloadInvoice = async (req: AuthRequest, res: Response, next: Nex
     doc.strokeColor('#cbd5e1').stroke();
     doc.moveDown(1);
 
+    const docFee = (appointment.doctor as any)?.fees || 500;
     doc.fontSize(14).fillColor('#0f172a').text('Billing Summary');
-    doc.fontSize(11).text('Consultation Fee: INR 500.00');
-    doc.fontSize(12).fillColor('#1e40af').text(`Total Amount Paid: INR 500.00`, { bold: true } as any);
+    doc.fontSize(11).text(`Consultation Fee: INR ${docFee}.00`);
+    doc.fontSize(12).fillColor('#1e40af').text(`Total Amount Paid: INR ${docFee}.00`, { bold: true } as any);
 
     doc.end();
   } catch (error) {

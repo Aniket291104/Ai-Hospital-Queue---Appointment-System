@@ -366,7 +366,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Top Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 relative">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 z-30 relative">
           {/* User Profile */}
           <div className="relative">
             <button 

@@ -76,7 +76,7 @@ export const getAppointments = asyncHandler(async (req: AuthRequest, res: Respon
 // @route   PUT /api/appointments/:id/status
 // @access  Private/Staff
 export const updateAppointmentStatus = asyncHandler(async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const { status } = req.body;
+  const { status, paymentStatus } = req.body;
 
   const appointment = await Appointment.findById(req.params.id);
 
@@ -84,7 +84,9 @@ export const updateAppointmentStatus = asyncHandler(async (req: AuthRequest, res
     throw new NotFoundError('Appointment not found');
   }
 
-  appointment.status = status;
+  if (status) appointment.status = status;
+  if (paymentStatus) appointment.paymentStatus = paymentStatus;
+  
   await appointment.save();
 
   res.status(200).json({ success: true, data: appointment });

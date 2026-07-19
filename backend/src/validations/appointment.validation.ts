@@ -19,6 +19,7 @@ export const updateAppointmentStatusSchema = {
     id: objectIdSchema,
   }),
   body: z.object({
-    status: z.nativeEnum(AppointmentStatus),
+    status: z.nativeEnum(AppointmentStatus).optional(),
+    paymentStatus: z.enum(['Pending', 'Paid', 'Failed']).optional(),
   }),
 };
