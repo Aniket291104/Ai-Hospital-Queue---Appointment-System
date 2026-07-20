@@ -422,7 +422,7 @@ export default function PatientDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex">
+    <div className="h-screen overflow-hidden bg-background text-foreground flex">
       {isSidebarOpen && (
         <div 
           onClick={() => setIsSidebarOpen(false)}
@@ -431,7 +431,7 @@ export default function PatientDashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className={`w-64 bg-card border-r border-border p-6 flex flex-col justify-between fixed md:sticky inset-y-0 left-0 z-50 md:z-30 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:flex shadow-xl md:shadow-none`}>
+      <aside className={`w-64 shrink-0 bg-card border-r border-border p-6 flex flex-col justify-between fixed md:sticky inset-y-0 left-0 z-50 md:z-30 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:flex shadow-xl md:shadow-none`}>
         <div>
           <div className="flex justify-between items-center mb-8">
             <div className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-500">
@@ -503,8 +503,8 @@ export default function PatientDashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 flex flex-col min-h-screen overflow-y-auto max-w-5xl mx-auto w-full">
-        <div className="flex-grow space-y-8">
+      <main className="flex-1 h-full overflow-y-auto w-full">
+        <div className="max-w-5xl mx-auto w-full p-6 md:p-10 flex-grow space-y-8">
           {/* Welcome Banner */}
           <header className="flex justify-between items-center">
             <div className="flex items-center gap-3">
