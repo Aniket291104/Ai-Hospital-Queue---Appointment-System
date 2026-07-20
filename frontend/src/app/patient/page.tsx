@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import io from 'socket.io-client';
 import toast from 'react-hot-toast';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Upload, Activity, FileText, Loader2, Eye, Trash2, Plus, Check, Edit, ShieldAlert, Sparkles } from 'lucide-react';
 
 export default function PatientDashboard() {
   const router = useRouter();
@@ -26,12 +26,28 @@ export default function PatientDashboard() {
   const [symptoms, setSymptoms] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRec, setAiRec] = useState<any>(null);
+  const [bookingPriority, setBookingPriority] = useState('Regular');
 
   // Chatbot
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Tab State
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'prescriptions'>('dashboard');
+
+  // Prescriptions state
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [prescriptionsLoading, setPrescriptionsLoading] = useState(false);
+
+  // OCR state
+  const [ocrImageBase64, setOcrImageBase64] = useState('');
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [editingPrescriptionId, setEditingPrescriptionId] = useState<string | null>(null);
+  const [editingMedicines, setEditingMedicines] = useState<any[]>([]);
+  const [editingInstructions, setEditingInstructions] = useState('');
 
   // QR Check-in Mock
   const [qrOpen, setQrOpen] = useState(false);
@@ -53,6 +69,7 @@ export default function PatientDashboard() {
     fetchAppointments();
     fetchHospitals();
     fetchAllDoctors();
+    fetchPrescriptions();
   }, [user]);
 
   // Socket for live queue updates
@@ -62,11 +79,10 @@ export default function PatientDashboard() {
     appointments.forEach((appt) => {
       if (appt.status === 'CheckedIn' && appt.doctor?._id) {
         socket.on(`queue-update-${appt.doctor._id}`, (updatedQueue) => {
-          // Find patient position inside updated queue patients array
           const queueUser = updatedQueue.patients.find((p: any) => p.user === user?.id);
           if (queueUser) {
             toast.success(`Queue position updated! You are now position: ${queueUser.position}`);
-            fetchAppointments(); // Refresh positions and waiting times
+            fetchAppointments();
           }
         });
       }
@@ -76,6 +92,12 @@ export default function PatientDashboard() {
       socket.disconnect();
     };
   }, [appointments]);
+
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory, chatLoading, chatOpen]);
 
   const fetchAppointments = async () => {
     try {
@@ -104,6 +126,18 @@ export default function PatientDashboard() {
     }
   };
 
+  const fetchPrescriptions = async () => {
+    setPrescriptionsLoading(true);
+    try {
+      const response = await api.get('/prescriptions');
+      setPrescriptions(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch prescriptions');
+    } finally {
+      setPrescriptionsLoading(false);
+    }
+  };
+
   const selectDoctorFromDirectory = async (doc: any) => {
     setSelectedHospital(doc.hospital?._id || '');
     setSelectedDepartment(doc.department?._id || '');
@@ -128,7 +162,21 @@ export default function PatientDashboard() {
     setSelectedDoctor('');
     try {
       const response = await api.get(`/hospitals/${hospitalId}/departments`);
-      setDepartments(response.data.data);
+      const deptList = response.data.data || [];
+      setDepartments(deptList);
+
+      if (aiRec?.recommendedDepartment && deptList.length > 0) {
+        const match = deptList.find((d: any) => 
+          d.name.toLowerCase().includes(aiRec.recommendedDepartment.toLowerCase()) ||
+          aiRec.recommendedDepartment.toLowerCase().includes(d.name.toLowerCase())
+        );
+        if (match) {
+          setSelectedDepartment(match._id);
+          const docRes = await api.get(`/doctors?hospital=${hospitalId}&department=${match._id}`);
+          setDoctors(docRes.data.data || []);
+          toast.success(`Automatically selected recommended department: ${match.name}`);
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch departments');
     }
@@ -150,8 +198,23 @@ export default function PatientDashboard() {
     setAiLoading(true);
     try {
       const response = await api.post('/ai/triage', { symptoms });
-      setAiRec(response.data.data);
+      const rec = response.data.data;
+      setAiRec(rec);
+      setBookingPriority(rec.priority || 'Regular');
       toast.success('AI Triage recommendation loaded!');
+
+      if (departments.length > 0 && rec.recommendedDepartment) {
+        const match = departments.find(d => 
+          d.name.toLowerCase().includes(rec.recommendedDepartment.toLowerCase()) ||
+          rec.recommendedDepartment.toLowerCase().includes(d.name.toLowerCase())
+        );
+        if (match) {
+          setSelectedDepartment(match._id);
+          const docRes = await api.get(`/doctors?hospital=${selectedHospital}&department=${match._id}`);
+          setDoctors(docRes.data.data || []);
+          toast.success(`Automatically selected recommended department: ${match.name}`);
+        }
+      }
     } catch (err) {
       toast.error('AI Triage request failed.');
     } finally {
@@ -169,10 +232,14 @@ export default function PatientDashboard() {
         date,
         timeSlot,
         symptoms,
+        priority: bookingPriority,
+        aiRecommendation: aiRec ? {
+          suggestedDoctor: aiRec.recommendedDepartment,
+          priorityReasoning: aiRec.reasoning,
+        } : undefined,
       });
       toast.success('Appointment booked successfully!');
       fetchAppointments();
-      // Reset form
       setSelectedHospital('');
       setDepartments([]);
       setDoctors([]);
@@ -180,6 +247,7 @@ export default function PatientDashboard() {
       setTimeSlot('');
       setSymptoms('');
       setAiRec(null);
+      setBookingPriority('Regular');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Booking failed');
     }
@@ -192,7 +260,6 @@ export default function PatientDashboard() {
         amount: amount || 500,
       });
       
-      // Verify payment immediately (Mock simulation)
       await api.post('/payments/verify', {
         razorpayOrderId: orderRes.data.orderId,
       });
@@ -218,14 +285,15 @@ export default function PatientDashboard() {
     e.preventDefault();
     if (!chatMessage.trim()) return;
 
-    const newHistory = [...chatHistory, { role: 'user', content: chatMessage }];
+    const msg = chatMessage;
+    const newHistory = [...chatHistory, { role: 'user', content: msg }];
     setChatHistory(newHistory);
     setChatMessage('');
     setChatLoading(true);
 
     try {
       const response = await api.post('/ai/chat', {
-        message: chatMessage,
+        message: msg,
         history: newHistory,
       });
       setChatHistory([...newHistory, { role: 'model', content: response.data.data }]);
@@ -234,6 +302,123 @@ export default function PatientDashboard() {
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const handleSelectSuggestion = async (text: string) => {
+    const newHistory = [...chatHistory, { role: 'user', content: text }];
+    setChatHistory(newHistory);
+    setChatLoading(true);
+
+    try {
+      const response = await api.post('/ai/chat', {
+        message: text,
+        history: newHistory,
+      });
+      setChatHistory([...newHistory, { role: 'model', content: response.data.data }]);
+    } catch (err) {
+      toast.error('Chat bot failed to reply');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handlePrescriptionFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setOcrImageBase64(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePatientRunOcr = async () => {
+    if (!ocrImageBase64) {
+      toast.error('Please upload an image first');
+      return;
+    }
+    setOcrLoading(true);
+    setEditingMedicines([]);
+    setEditingInstructions('');
+    try {
+      const res = await api.post('/ai/ocr', { image: ocrImageBase64 });
+      const prescription = res.data.data;
+      setEditingMedicines(prescription.medicines || []);
+      setEditingInstructions(prescription.instructions || 'Extracted automatically via OCR.');
+      setEditingPrescriptionId(prescription._id);
+      toast.success('OCR analysis complete! You can now edit the medicines below.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'OCR request failed');
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const updateMedicineRow = (index: number, field: string, value: string) => {
+    setEditingMedicines(prev => prev.map((med, idx) => {
+      if (idx === index) {
+        return { ...med, [field]: value };
+      }
+      return med;
+    }));
+  };
+
+  const deleteMedicineRow = (index: number) => {
+    setEditingMedicines(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const addMedicineRow = () => {
+    setEditingMedicines(prev => [...prev, { name: '', dosage: '', timing: '', duration: '' }]);
+  };
+
+  const handleSavePrescription = async () => {
+    if (editingMedicines.length === 0) {
+      toast.error('Please add at least one medicine');
+      return;
+    }
+    try {
+      if (editingPrescriptionId) {
+        await api.put(`/prescriptions/${editingPrescriptionId}`, {
+          medicines: editingMedicines,
+          instructions: editingInstructions,
+        });
+        toast.success('Prescription updated and saved successfully!');
+      } else {
+        await api.post('/prescriptions', {
+          medicines: editingMedicines,
+          instructions: editingInstructions,
+        });
+        toast.success('Prescription saved successfully!');
+      }
+      setOcrImageBase64('');
+      setEditingPrescriptionId(null);
+      setEditingMedicines([]);
+      setEditingInstructions('');
+      fetchPrescriptions();
+    } catch (err) {
+      toast.error('Failed to save prescription');
+    }
+  };
+
+  const handleDeletePrescription = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this prescription?')) return;
+    try {
+      await api.delete(`/prescriptions/${id}`);
+      toast.success('Prescription deleted successfully');
+      fetchPrescriptions();
+    } catch (err) {
+      toast.error('Failed to delete prescription');
+    }
+  };
+
+  const loadPrescriptionForEditing = (pres: any) => {
+    setEditingPrescriptionId(pres._id);
+    setEditingMedicines(pres.medicines || []);
+    setEditingInstructions(pres.instructions || '');
+    setOcrImageBase64(pres.imageUrl || '');
+    setActiveTab('prescriptions');
+    toast.success('Loaded prescription for editing!');
   };
 
   return (
@@ -262,16 +447,31 @@ export default function PatientDashboard() {
           <nav className="space-y-2">
             <button 
               onClick={() => {
+                setActiveTab('dashboard');
                 setChatOpen(false);
                 setIsSidebarOpen(false);
               }}
               className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                !chatOpen 
+                activeTab === 'dashboard' && !chatOpen
                   ? 'bg-primary/10 text-primary' 
                   : 'hover:bg-secondary text-muted-foreground'
               }`}
             >
               Dashboard
+            </button>
+            <button 
+              onClick={() => {
+                setActiveTab('prescriptions');
+                setChatOpen(false);
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'prescriptions' && !chatOpen
+                  ? 'bg-primary/10 text-primary' 
+                  : 'hover:bg-secondary text-muted-foreground'
+              }`}
+            >
+              My Prescriptions & OCR
             </button>
             <button 
               onClick={() => {
@@ -330,6 +530,8 @@ export default function PatientDashboard() {
             </button>
           </header>
 
+        {activeTab === 'dashboard' ? (
+          <>
         {/* Live Queue status cards for patient */}
         {appointments.some((appt) => appt.status === 'CheckedIn') && (
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -354,6 +556,20 @@ export default function PatientDashboard() {
                     <div>
                       <span className="text-[10px] text-blue-100 block">Est. Wait Time</span>
                       <span className="text-2xl font-bold">{appt.estimatedWaitingTime}m</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-white/20 pt-3 space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-blue-100 font-semibold">
+                      <span>Live Queue Progress</span>
+                      <span>{appt.queuePosition > 1 ? `${appt.queuePosition - 1} patients ahead` : 'Next in line!'}</span>
+                    </div>
+                    <div className="w-full bg-white/25 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-emerald-400 h-full rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${Math.max(10, Math.min(100, 100 - (appt.queuePosition * 15)))}%` 
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -517,6 +733,20 @@ export default function PatientDashboard() {
                 </div>
               )}
 
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1.5">Triage Priority (AI Recommended or Custom)</label>
+                <select
+                  required
+                  value={bookingPriority}
+                  onChange={(e) => setBookingPriority(e.target.value)}
+                  className="w-full p-2.5 rounded-lg border border-border bg-background text-sm font-semibold"
+                >
+                  <option value="Regular">Regular (Normal check)</option>
+                  <option value="Priority">Priority (Faster check)</option>
+                  <option value="Emergency">Emergency (Immediate care)</option>
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1.5">Date</label>
@@ -617,6 +847,266 @@ export default function PatientDashboard() {
             </div>
           </div>
         </section>
+          </>
+        ) : (
+          <div className="space-y-8 animate-fade-in">
+            <div>
+              <h3 className="text-xl font-bold text-[#2C3137]">My Medical Prescriptions</h3>
+              <p className="text-xs text-muted-foreground font-semibold">Digitize and manage your prescriptions using Google Gemini OCR or add them manually.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Column: OCR Scanner & Editor */}
+              <div className="bg-card border border-border p-6 rounded-3xl shadow-sm space-y-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center border-b pb-3 mb-4">
+                    <h4 className="text-sm font-extrabold text-[#2C3137]">Prescription Scanner & Editor</h4>
+                    <span className="px-2.5 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-wider">Gemini Vision</span>
+                  </div>
+
+                  {/* Image Upload Area */}
+                  <div className="border-2 border-dashed border-[#DAE3EE] hover:border-[#6AB8FF]/50 transition-all rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-3 bg-[#DAE3EE]/10 cursor-pointer min-h-[160px] relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePrescriptionFileChange}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <Upload className="w-8 h-8 text-[#7C7C7C]" />
+                    <div>
+                      <p className="text-xs font-bold text-gray-700">Choose prescription file or drag here</p>
+                      <p className="text-[10px] text-gray-400 mt-1 font-semibold">Supports PNG, JPG, JPEG</p>
+                    </div>
+                  </div>
+
+                  {ocrImageBase64 && (
+                    <div className="mt-4 p-3 bg-[#DAE3EE]/20 rounded-xl flex items-center justify-between border">
+                      <div className="flex items-center gap-2.5">
+                        <img src={ocrImageBase64} alt="Preview" className="w-10 h-10 object-cover rounded-lg border shadow-sm" />
+                        <span className="text-[11px] font-bold text-gray-700">Prescription image selected</span>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setOcrImageBase64('');
+                          setEditingPrescriptionId(null);
+                        }}
+                        className="text-[10px] text-red-500 hover:underline font-bold"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+
+                  {ocrImageBase64 && !editingPrescriptionId && (
+                    <button
+                      disabled={ocrLoading}
+                      onClick={handlePatientRunOcr}
+                      className="w-full mt-4 py-3 bg-gradient-to-r from-[#6AB8FF] to-[#CFA3F6] text-white font-bold rounded-xl shadow-sm text-xs disabled:opacity-40 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {ocrLoading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Analyzing with Gemini Vision...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-3.5 h-3.5" />
+                          Extract prescription details
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Editor Area (for parsed or manual entry) */}
+                {(editingMedicines.length > 0 || editingPrescriptionId) && (
+                  <div className="space-y-4 pt-4 border-t mt-4">
+                    <div className="flex justify-between items-center">
+                      <h5 className="text-xs font-extrabold text-[#7C7C7C] uppercase tracking-wider">Medicines & Dosage List</h5>
+                      <button
+                        onClick={addMedicineRow}
+                        className="flex items-center gap-1 text-[10px] font-bold text-[#6AB8FF] hover:underline cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Row
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[250px] border rounded-xl bg-background/50">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b bg-secondary/40 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+                            <th className="p-2">Medicine Name</th>
+                            <th className="p-2">Dosage</th>
+                            <th className="p-2">Timing</th>
+                            <th className="p-2">Duration</th>
+                            <th className="p-2 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {editingMedicines.map((m, i) => (
+                            <tr key={i} className="border-b border-border/40 hover:bg-[#DAE3EE]/10">
+                              <td className="p-1">
+                                <input
+                                  type="text"
+                                  value={m.name}
+                                  onChange={(e) => updateMedicineRow(i, 'name', e.target.value)}
+                                  className="w-full p-1 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded"
+                                  placeholder="e.g. Paracetamol"
+                                />
+                              </td>
+                              <td className="p-1">
+                                <input
+                                  type="text"
+                                  value={m.dosage}
+                                  onChange={(e) => updateMedicineRow(i, 'dosage', e.target.value)}
+                                  className="w-full p-1 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded"
+                                  placeholder="e.g. 500mg"
+                                />
+                              </td>
+                              <td className="p-1">
+                                <input
+                                  type="text"
+                                  value={m.timing}
+                                  onChange={(e) => updateMedicineRow(i, 'timing', e.target.value)}
+                                  className="w-full p-1 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded"
+                                  placeholder="e.g. Morning, Night"
+                                />
+                              </td>
+                              <td className="p-1">
+                                <input
+                                  type="text"
+                                  value={m.duration}
+                                  onChange={(e) => updateMedicineRow(i, 'duration', e.target.value)}
+                                  className="w-full p-1 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded"
+                                  placeholder="e.g. 5 days"
+                                />
+                              </td>
+                              <td className="p-1 text-center">
+                                <button
+                                  onClick={() => deleteMedicineRow(i)}
+                                  className="p-1 hover:bg-red-500/10 text-red-500 rounded cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-extrabold text-[#7C7C7C] uppercase tracking-wider">Instructions & Notes</label>
+                      <textarea
+                        value={editingInstructions}
+                        onChange={(e) => setEditingInstructions(e.target.value)}
+                        rows={2}
+                        className="w-full p-2 rounded-xl border border-border bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        placeholder="Additional notes about timing, meals, or side effects..."
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleSavePrescription}
+                      className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" /> Save Prescription to Profile
+                    </button>
+                  </div>
+                )}
+
+                {editingMedicines.length === 0 && !editingPrescriptionId && (
+                  <button
+                    onClick={() => setEditingMedicines([{ name: '', dosage: '', timing: '', duration: '' }])}
+                    className="w-full py-2.5 border border-border hover:bg-secondary text-xs font-bold rounded-xl mt-4 flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Enter Prescription Details Manually
+                  </button>
+                )}
+              </div>
+
+              {/* Right Column: History of saved prescriptions */}
+              <div className="bg-card border border-border p-6 rounded-3xl shadow-sm space-y-4 flex flex-col h-[500px]">
+                <h4 className="text-sm font-extrabold text-[#2C3137] border-b pb-3 mb-2">My Saved Prescriptions ({prescriptions.length})</h4>
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                  {prescriptionsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      <p className="text-xs text-muted">Loading prescriptions...</p>
+                    </div>
+                  ) : prescriptions.length === 0 ? (
+                    <div className="text-center py-20 text-gray-400 font-semibold flex flex-col items-center justify-center space-y-2">
+                      <FileText className="w-8 h-8 text-gray-300" />
+                      <p className="text-xs">No prescriptions saved yet.</p>
+                      <p className="text-[10px] text-gray-400">Use the scanner on the left to digitize your first prescription!</p>
+                    </div>
+                  ) : (
+                    prescriptions.map((pres) => (
+                      <div key={pres._id} className="p-4 border border-border/80 rounded-2xl bg-background/50 hover:border-primary/30 transition-all space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] font-bold text-gray-400 block">Digitized On {new Date(pres.createdAt).toLocaleDateString()}</span>
+                            {pres.appointment?.doctor ? (
+                              <h5 className="font-extrabold text-sm text-[#2C3137]">Dr. {pres.appointment.doctor.user?.firstName} {pres.appointment.doctor.user?.lastName}</h5>
+                            ) : (
+                              <h5 className="font-extrabold text-sm text-gray-600">Personal / OCR Upload</h5>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => loadPrescriptionForEditing(pres)}
+                              className="p-1.5 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white rounded-lg transition-all cursor-pointer"
+                              title="Edit prescription"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePrescription(pres._id)}
+                              className="p-1.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-all cursor-pointer"
+                              title="Delete prescription"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto border rounded-lg bg-background/80">
+                          <table className="w-full text-left text-[11px] border-collapse">
+                            <thead>
+                              <tr className="border-b bg-secondary/30 font-bold text-gray-500">
+                                <th className="p-1.5">Medicine</th>
+                                <th className="p-1.5">Dosage</th>
+                                <th className="p-1.5">Timing</th>
+                                <th className="p-1.5">Duration</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pres.medicines?.map((m: any, idx: number) => (
+                                <tr key={idx} className="border-b border-border/30 last:border-0 hover:bg-secondary/20">
+                                  <td className="p-1.5 font-bold text-gray-700">{m.name}</td>
+                                  <td className="p-1.5 text-gray-600">{m.dosage}</td>
+                                  <td className="p-1.5 text-gray-500">{m.timing}</td>
+                                  <td className="p-1.5 text-gray-600 font-semibold">{m.duration}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {pres.instructions && (
+                          <div className="text-[10px] bg-secondary/50 p-2.5 rounded-xl text-gray-600 border border-border/30">
+                            <p className="font-bold text-gray-400 uppercase tracking-wider text-[8px] mb-0.5">Instructions</p>
+                            <p className="font-semibold leading-relaxed">{pres.instructions}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         </div>
 
         {/* Footer */}
@@ -654,7 +1144,30 @@ export default function PatientDashboard() {
                 </div>
               </div>
             ))}
-            {chatLoading && <div className="text-xs text-muted">Assistant typing...</div>}
+            {chatLoading && <div className="text-xs text-muted animate-pulse">Assistant typing...</div>}
+
+            {chatHistory.length === 0 && (
+              <div className="pt-2 space-y-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quick Suggestions:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "I have a high fever & headache",
+                    "Which department handles joint pain?",
+                    "How to check-in for appointment?",
+                    "Need guidance on heart palpitations"
+                  ].map((s, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSelectSuggestion(s)}
+                      className="text-[10px] bg-secondary hover:bg-primary/10 text-gray-700 hover:text-primary px-2.5 py-1 rounded-full border border-border/85 transition-all text-left font-semibold cursor-pointer"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
           </div>
           <form onSubmit={sendChatMessage} className="p-3 border-t border-border flex gap-2">
             <input

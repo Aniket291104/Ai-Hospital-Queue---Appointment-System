@@ -11,6 +11,11 @@ export const bookAppointmentSchema = {
     date: z.string().refine((val) => !isNaN(Date.parse(val)), 'Invalid date format'),
     timeSlot: z.string().min(1, 'Time slot is required'),
     symptoms: z.string().optional(),
+    priority: z.enum(['Regular', 'Priority', 'Emergency']).optional(),
+    aiRecommendation: z.object({
+      suggestedDoctor: z.string().optional(),
+      priorityReasoning: z.string().optional(),
+    }).optional(),
   }),
 };
 

@@ -300,6 +300,32 @@ export default function AdminDashboard() {
     }
   };
 
+  const updateOcrMedicineRow = (index: number, field: string, value: string) => {
+    if (!ocrResult) return;
+    setOcrResult((prev: any) => {
+      const updatedMedicines = prev.medicines.map((med: any, idx: number) => {
+        if (idx === index) {
+          return { ...med, [field]: value };
+        }
+        return med;
+      });
+      return { ...prev, medicines: updatedMedicines };
+    });
+  };
+
+  const handleSaveOcrEdits = async () => {
+    if (!ocrResult?._id) return;
+    try {
+      await api.put(`/prescriptions/${ocrResult._id}`, {
+        medicines: ocrResult.medicines,
+        instructions: ocrResult.instructions,
+      });
+      toast.success('OCR Prescription updates saved to database!');
+    } catch (err) {
+      toast.error('Failed to save prescription updates');
+    }
+  };
+
   const handleUpdateLabTest = (id: string) => {
     setLabTests(prev => prev.map(t => {
       if (t.id === id) {
@@ -1119,10 +1145,38 @@ export default function AdminDashboard() {
                               {Array.isArray(ocrResult.medicines) ? (
                                 ocrResult.medicines.map((m: any, i: number) => (
                                   <tr key={i} className="border-b border-gray-100 hover:bg-[#DAE3EE]/10">
-                                    <td className="py-2.5 font-bold text-[#2C3137]">{m.name}</td>
-                                    <td className="py-2.5 font-semibold text-gray-700">{m.dosage}</td>
-                                    <td className="py-2.5 text-gray-500">{m.timing}</td>
-                                    <td className="py-2.5 text-gray-500 font-semibold">{m.duration}</td>
+                                    <td className="py-1">
+                                      <input
+                                        type="text"
+                                        value={m.name}
+                                        onChange={(e) => updateOcrMedicineRow(i, 'name', e.target.value)}
+                                        className="p-1.5 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded font-bold text-[#2C3137] w-full"
+                                      />
+                                    </td>
+                                    <td className="py-1">
+                                      <input
+                                        type="text"
+                                        value={m.dosage}
+                                        onChange={(e) => updateOcrMedicineRow(i, 'dosage', e.target.value)}
+                                        className="p-1.5 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded font-semibold text-gray-700 w-full"
+                                      />
+                                    </td>
+                                    <td className="py-1">
+                                      <input
+                                        type="text"
+                                        value={m.timing}
+                                        onChange={(e) => updateOcrMedicineRow(i, 'timing', e.target.value)}
+                                        className="p-1.5 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded text-gray-500 w-full"
+                                      />
+                                    </td>
+                                    <td className="py-1">
+                                      <input
+                                        type="text"
+                                        value={m.duration}
+                                        onChange={(e) => updateOcrMedicineRow(i, 'duration', e.target.value)}
+                                        className="p-1.5 bg-transparent border-0 text-xs focus:ring-1 focus:ring-primary rounded font-semibold text-gray-500 w-full"
+                                      />
+                                    </td>
                                   </tr>
                                 ))
                               ) : (
@@ -1133,10 +1187,21 @@ export default function AdminDashboard() {
                             </tbody>
                           </table>
                         </div>
-                        <div className="text-[10px] bg-[#FCFDFF] border p-3 rounded-2xl">
+                        <div className="text-[10px] bg-[#FCFDFF] border p-3 rounded-2xl space-y-1.5">
                           <p className="font-bold text-gray-500">Instructions / Notes:</p>
-                          <p className="text-gray-700 font-semibold mt-0.5">{ocrResult.instructions || 'Extracted automatically.'}</p>
+                          <textarea
+                            value={ocrResult.instructions || ''}
+                            onChange={(e) => setOcrResult((prev: any) => ({ ...prev, instructions: e.target.value }))}
+                            rows={2}
+                            className="w-full p-2 border border-border rounded-xl bg-background text-xs"
+                          />
                         </div>
+                        <button
+                          onClick={handleSaveOcrEdits}
+                          className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          Save Prescription Updates
+                        </button>
                       </div>
                     ) : (
                       <div className="text-center py-16 text-gray-400 font-semibold flex flex-col items-center justify-center space-y-2">

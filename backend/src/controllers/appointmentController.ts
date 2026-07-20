@@ -10,7 +10,7 @@ import { BadRequestError, NotFoundError } from '../utils/errors';
 // @route   POST /api/appointments
 // @access  Private/Patient
 export const bookAppointment = asyncHandler(async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const { doctorId, hospitalId, departmentId, date, timeSlot, symptoms } = req.body;
+  const { doctorId, hospitalId, departmentId, date, timeSlot, symptoms, priority, aiRecommendation } = req.body;
 
   const doctor = await Doctor.findById(doctorId);
   if (!doctor) {
@@ -37,7 +37,8 @@ export const bookAppointment = asyncHandler(async (req: AuthRequest, res: Respon
     date: new Date(date),
     timeSlot,
     symptoms,
-    priority: AppointmentPriority.REGULAR, // default
+    priority: priority || AppointmentPriority.REGULAR,
+    aiRecommendation,
   });
 
   res.status(201).json({ success: true, data: appointment });

@@ -46,6 +46,7 @@ import appointmentRoutes from './routes/appointmentRoutes';
 import queueRoutes from './routes/queueRoutes';
 import aiRoutes from './routes/aiRoutes';
 import paymentRoutes from './routes/paymentRoutes';
+import prescriptionRoutes from './routes/prescriptionRoutes';
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -56,6 +57,7 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/queues', queueRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/prescriptions', prescriptionRoutes);
 
 // Basic Route
 app.get('/', (req, res) => {

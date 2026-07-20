@@ -124,6 +124,8 @@ export default function DoctorDashboard() {
 
   const waitingPatients = queue?.patients?.filter((p: any) => p.status === 'Waiting') || [];
   const inConsultation = queue?.patients?.find((p: any) => p.status === 'In-Consultation');
+  const totalCompleted = queue?.patients?.filter((p: any) => p.status === 'Completed').length || 0;
+  const emergencyCount = queue?.patients?.filter((p: any) => p.status === 'Waiting' && p.appointment?.priority === 'Emergency').length || 0;
 
   return (
     <div className="min-h-screen bg-[#DAE3EE] text-[#2C3137] font-urbanist relative overflow-x-hidden p-6 md:p-10 flex flex-col justify-between w-full max-w-[1380px] mx-auto">
@@ -340,6 +342,41 @@ export default function DoctorDashboard() {
           </div>
         </section>
 
+        {/* Queue Summary Cards */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-6 z-10 relative">
+          <div className="bg-[#FCFDFF] rounded-[24px] p-5 border border-white/50 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
+            <div>
+              <p className="text-[10px] text-[#7C7C7C] font-bold uppercase tracking-wider">Total Waiting</p>
+              <h3 className="text-2xl font-extrabold text-[#2C3137] mt-1">{waitingPatients.length}</h3>
+            </div>
+            <Users className="w-8 h-8 text-[#CFA3F6] opacity-70" />
+          </div>
+          
+          <div className="bg-[#FCFDFF] rounded-[24px] p-5 border border-white/50 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
+            <div>
+              <p className="text-[10px] text-[#7C7C7C] font-bold uppercase tracking-wider">Emergency Cases</p>
+              <h3 className="text-2xl font-extrabold text-red-500 mt-1">{emergencyCount}</h3>
+            </div>
+            <ShieldAlert className="w-8 h-8 text-red-400 opacity-80" />
+          </div>
+
+          <div className="bg-[#FCFDFF] rounded-[24px] p-5 border border-white/50 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
+            <div>
+              <p className="text-[10px] text-[#7C7C7C] font-bold uppercase tracking-wider">Queue Delay</p>
+              <h3 className="text-2xl font-extrabold text-amber-500 mt-1">{delay} Min</h3>
+            </div>
+            <Clock className="w-8 h-8 text-amber-400 opacity-80" />
+          </div>
+
+          <div className="bg-[#FCFDFF] rounded-[24px] p-5 border border-white/50 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
+            <div>
+              <p className="text-[10px] text-[#7C7C7C] font-bold uppercase tracking-wider">Completed Today</p>
+              <h3 className="text-2xl font-extrabold text-emerald-500 mt-1">{totalCompleted}</h3>
+            </div>
+            <UserCheck className="w-8 h-8 text-emerald-400 opacity-80" />
+          </div>
+        </section>
+
         {/* Doctor Dashboard Modules */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 z-10 relative items-start">
           {/* Main Queue Panels */}
@@ -404,7 +441,18 @@ export default function DoctorDashboard() {
                       waitingPatients.map((p: any) => (
                         <tr key={p._id} className="border-b border-gray-50 hover:bg-gray-50/50 font-semibold text-[#2C3137]">
                           <td className="py-3 px-2 font-extrabold text-[#6AB8FF]">{p.token}</td>
-                          <td className="py-3 px-2">{p.user?.firstName} {p.user?.lastName}</td>
+                          <td className="py-3 px-2">
+                            <div>{p.user?.firstName} {p.user?.lastName}</div>
+                            {p.appointment?.priority && (
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider mt-0.5 ${
+                                p.appointment.priority === 'Emergency' ? 'bg-red-100 text-red-600 border border-red-200' :
+                                p.appointment.priority === 'Priority' ? 'bg-amber-100 text-amber-600 border border-amber-200' :
+                                'bg-gray-100 text-gray-600 border border-gray-200'
+                              }`}>
+                                {p.appointment.priority}
+                              </span>
+                            )}
+                          </td>
                           <td className="py-3 px-2 text-[#7C7C7C]">
                             {new Date(p.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </td>

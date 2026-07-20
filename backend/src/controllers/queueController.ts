@@ -13,36 +13,47 @@ const getTodayDate = () => {
   return today;
 };
 
+// Helper to get fully populated queue state
+const getFullyPopulatedQueue = async (doctorId: string, date: Date) => {
+  return Queue.findOne({ doctor: doctorId, date })
+    .populate('doctor')
+    .populate({
+      path: 'patients.user',
+      select: 'firstName lastName email avatar',
+    })
+    .populate({
+      path: 'patients.appointment',
+      select: 'priority symptoms aiRecommendation',
+    });
+};
+
 // @desc    Get queue state for a doctor
 // @route   GET /api/queues/doctor/:doctorId
 // @access  Public
 export const getQueueState = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const today = getTodayDate();
-    let queue = await Queue.findOne({ doctor: req.params.doctorId, date: today })
-      .populate('doctor')
-      .populate({
-        path: 'patients.user',
-        select: 'firstName lastName email avatar',
-      });
+    const docId = req.params.doctorId as string;
+    let queue = await getFullyPopulatedQueue(docId, today);
 
     if (!queue) {
-      // Find doctor profile to get hospital/dept info
-      const doctorProfile = await Doctor.findById(req.params.doctorId);
+      const doctorProfile = await Doctor.findById(docId);
       if (!doctorProfile) {
         res.status(404);
         return next(new Error('Doctor not found'));
       }
 
-      // Create a new queue doc for today
       queue = await Queue.create({
-        doctor: req.params.doctorId as any,
+        doctor: docId as any,
         hospital: doctorProfile.hospital,
         date: today,
         status: QueueStatus.ACTIVE,
         patients: [],
         estimatedDelay: 0,
       });
+
+      // Fetch again to ensure populated format
+      queue = await getFullyPopulatedQueue(docId, today);
     }
 
     res.status(200).json({ success: true, data: queue });
@@ -136,7 +147,8 @@ export const checkInPatient = async (req: AuthRequest, res: Response, next: Next
 export const callNextPatient = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const today = getTodayDate();
-    const queue = await Queue.findOne({ doctor: req.params.doctorId, date: today });
+    const doctorId = req.params.doctorId as string;
+    const queue = await Queue.findOne({ doctor: doctorId, date: today });
 
     if (!queue) {
       res.status(404);
@@ -155,15 +167,16 @@ export const callNextPatient = async (req: AuthRequest, res: Response, next: Nex
     if (!nextPatient) {
       queue.currentToken = 'None';
       await queue.save();
-      io.emit(`queue-update-${req.params.doctorId}`, queue);
-      return res.status(200).json({ success: true, message: 'No more patients in the queue', data: queue });
+      const populatedQueue = await getFullyPopulatedQueue(doctorId, today);
+      io.emit(`queue-update-${doctorId}`, populatedQueue);
+      return res.status(200).json({ success: true, message: 'No more patients in the queue', data: populatedQueue });
     }
 
     nextPatient.status = 'In-Consultation';
     queue.currentToken = nextPatient.token;
 
     // Shift positions of other waiting patients and calculate remaining waiting times
-    const doctorProfile = await Doctor.findById(req.params.doctorId);
+    const doctorProfile = await Doctor.findById(doctorId);
     const avgConsultTime = doctorProfile?.averageConsultationTime || 15;
 
     let waitIndex = 0;
@@ -180,10 +193,12 @@ export const callNextPatient = async (req: AuthRequest, res: Response, next: Nex
 
     await queue.save();
 
-    // Trigger real-time update
-    io.emit(`queue-update-${req.params.doctorId}`, queue);
+    const populatedQueue = await getFullyPopulatedQueue(doctorId, today);
 
-    res.status(200).json({ success: true, message: `Calling patient token ${nextPatient.token}`, data: queue });
+    // Trigger real-time update
+    io.emit(`queue-update-${doctorId}`, populatedQueue);
+
+    res.status(200).json({ success: true, message: `Calling patient token ${nextPatient.token}`, data: populatedQueue });
   } catch (error) {
     next(error);
   }
@@ -197,7 +212,8 @@ export const updateQueueStatus = async (req: AuthRequest, res: Response, next: N
 
   try {
     const today = getTodayDate();
-    const queue = await Queue.findOne({ doctor: req.params.doctorId, date: today });
+    const doctorId = req.params.doctorId as string;
+    const queue = await Queue.findOne({ doctor: doctorId, date: today });
 
     if (!queue) {
       res.status(404);
@@ -210,7 +226,7 @@ export const updateQueueStatus = async (req: AuthRequest, res: Response, next: N
     await queue.save();
 
     // Recalculate waiting times for all waiting patients and update their appointments
-    const doctorProfile = await Doctor.findById(req.params.doctorId);
+    const doctorProfile = await Doctor.findById(doctorId);
     const avgConsultTime = doctorProfile?.averageConsultationTime || 15;
 
     let waitIndex = 0;
@@ -224,10 +240,12 @@ export const updateQueueStatus = async (req: AuthRequest, res: Response, next: N
       }
     }
 
-    // Emit event
-    io.emit(`queue-update-${req.params.doctorId}`, queue);
+    const populatedQueue = await getFullyPopulatedQueue(doctorId, today);
 
-    res.status(200).json({ success: true, data: queue });
+    // Emit event
+    io.emit(`queue-update-${doctorId}`, populatedQueue);
+
+    res.status(200).json({ success: true, data: populatedQueue });
   } catch (error) {
     next(error);
   }
